@@ -24,8 +24,10 @@ hdfs-dfs-put:
 	docker exec $(container) $(hdfs) dfs -put -f /tmp/hdfs_tmp/$(base_name) $(dest);
 
 mapred-compile-run:
+	docker exec $(container) rm -rf /tmp/mapred;
 	docker exec $(container) mkdir -p /tmp/mapred;
 	docker cp $(src) $(container):/tmp/mapred;
 	docker exec --workdir /tmp/mapred $(container) $(hadoop) com.sun.tools.javac.Main $(base_name);
 	docker exec --workdir /tmp/mapred $(container) sh -c "jar cf $(base_name_strip).jar $(base_name_strip)*.class";
+	docker exec $(container) $(hdfs) dfs -rm -R $(output);
 	docker exec --workdir /tmp/mapred $(container) $(hadoop) jar $(base_name_strip).jar $(base_name_strip) $(input) $(output);
