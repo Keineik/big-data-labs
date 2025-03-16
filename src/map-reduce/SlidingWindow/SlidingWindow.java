@@ -22,10 +22,15 @@ public class SlidingWindow {
                     ) throws IOException, InterruptedException {
 
       String[] record = value.toString().split(",");
-      // Check if contains header or blank values
-      if ("index".equals(record[0].trim())) return;
-      if (record[15].trim().isEmpty()) return;
-      if (record[13].trim().isEmpty()) return;
+      // If contains header
+      if ("index".equals(record[0])) {
+        // Add space character so that it will be on top in the sort and shuffle phase
+        String header = " report_date,sku,total_quantity";
+        context.write(new Text(header), new FloatWritable(0));
+        return;
+      }
+      // If contains blank values
+      if (record[15].trim().isEmpty() || record[13].trim().isEmpty()) return;
 
       // Get relevant columns
       LocalDate recordDate = LocalDate.parse(record[2], DateTimeFormatter.ofPattern("MM-dd-yy"));
@@ -65,8 +70,16 @@ public class SlidingWindow {
         sum += val.get();
       }
 
-      // Format date
       String[] parts = key.toString().split(",");
+      // If is header
+      if (" report_date".equals(parts[0])) {
+        // Remove the space added in the map function
+        String outKey = key.toString().substring(1);
+        context.write(new Text(outKey), NullWritable.get());
+        return;
+      }
+
+      // Format date
       String formattedDate = (LocalDate.parse(parts[0]))
                 .format(DateTimeFormatter.ofPattern("dd/MM/yyyy"));
 
