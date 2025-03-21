@@ -1,5 +1,5 @@
-from pyspark.sql import SparkSession, Window
-from pyspark.sql.functions import sum, to_date, expr, asc
+from pyspark.sql import SparkSession
+from pyspark.sql.functions import *
 
 # Get spark session
 spark = SparkSession.builder\
@@ -13,17 +13,35 @@ df = spark.read.format("csv")\
             .option("inferSchema", True)\
             .load("./data/AmazonSaleReport.csv")
 
-df.createOrReplaceTempView("amz");
+
+# Convert from String to DateType
+df = df.withColumn("Date", to_date("Date", "MM-dd-yy"))
+
+
+# Get DataFrame of report dates
+report_conf = df.selectExpr(
+                    "MIN(Date) AS range_begin",
+                    "DATEDIFF(DATEADD(MAX(Date), 6), MIN(Date)) AS range_size"
+                ).collect()
+
+range_begin = report_conf[0]["range_begin"]
+range_size = report_conf[0]["range_size"]
+
+report_dates_df = spark.range(0, range_size)\
+                       .withColumn("report_date", dateadd(lit(range_begin), col("id").cast("int")))\
+                       .where(dayofweek("report_date") == 2)
+
 
 # Total quantity (Qty) of items shipped for
 # each SKU in the last 7 days, but only report this total every Monday
-df.withColumn("Date", to_date("Date", "MM-dd-yy"))\
-    .withColumn("total_quantity", sum("Qty").over(Window.partitionBy("SKU")
-                                                        .orderBy(expr("DATEDIFF(Date, '0')"))
-                                                        .rangeBetween(-6, 0)))\
-    .selectExpr("DATE_FORMAT(Date, 'dd/MM/yyyy') AS report_date", "SKU AS sku", "total_quantity")\
-    .where("DAYOFWEEK(Date) = 2")\
-    .distinct()\
-    .orderBy(asc("Date"), asc("SKU"))\
-    .show(15)
-    # .write.mode("overwrite").csv("output")
+report_df = report_dates_df\
+    .join(df, how="left", on=expr("DATEDIFF(report_date, Date) BETWEEN 0 AND 6"))\
+    .groupBy("report_date", "SKU")\
+    .agg(sum("Qty").alias("total_quantity"))\
+    .selectExpr("report_date", "sku", "total_quantity")\
+    .orderBy(asc("report_date"), asc("sku"))\
+
+
+# Show and write output to file
+report_df.show(15, truncate=False)
+report_df.write.option("header", True).mode("overwrite").csv("output")

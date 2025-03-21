@@ -25,23 +25,22 @@ public class SlidingWindow {
       // If contains header
       if ("index".equals(record[0])) {
         // Add space character so that it will be on top in the sort and shuffle phase
-        String header = " report_date,sku,total_quantity";
+        String header = " report_date,category,revenue";
         context.write(new Text(header), new FloatWritable(0));
         return;
       }
+
       // If contains blank values
-      if (record[15].trim().isEmpty() || record[13].trim().isEmpty()) return;
+      if (record[15].trim().isEmpty()) return;
 
       // Get relevant columns
       LocalDate recordDate = LocalDate.parse(record[2], DateTimeFormatter.ofPattern("MM-dd-yy"));
       String category = record[9];
       float amount = Float.parseFloat(record[15]);
-      int quantity = Integer.parseInt(record[13]);
 
       for (int i = 0; i < 3; i++) {
         String outKey = recordDate.plusDays(i).toString() + "," + category;
-        float outValue = amount * quantity;
-        context.write(new Text(outKey), new FloatWritable(outValue));
+        context.write(new Text(outKey), new FloatWritable(amount));
       }
     }
   }
@@ -49,6 +48,7 @@ public class SlidingWindow {
   public static class SumCombiner extends Reducer<Text, FloatWritable, Text, FloatWritable> {
     public void reduce(Text key, Iterable<FloatWritable> values, Context context)
         throws IOException, InterruptedException {
+      
       float sum = 0;
       for (FloatWritable val : values) {
         sum += val.get();
