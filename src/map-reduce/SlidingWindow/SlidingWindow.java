@@ -4,7 +4,7 @@ import java.time.format.DateTimeFormatter;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.io.FloatWritable;
+import org.apache.hadoop.io.DoubleWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.hadoop.mapreduce.Mapper;
@@ -16,7 +16,7 @@ import org.apache.hadoop.io.NullWritable;
 public class SlidingWindow {
 
   public static class WindowMapper
-       extends Mapper<Object, Text, Text, FloatWritable>{
+       extends Mapper<Object, Text, Text, DoubleWritable>{
 
     public void map(Object key, Text value, Context context
                     ) throws IOException, InterruptedException {
@@ -26,7 +26,7 @@ public class SlidingWindow {
       if ("index".equals(record[0])) {
         // Add space character so that it will be on top in the sort and shuffle phase
         String header = " report_date,category,revenue";
-        context.write(new Text(header), new FloatWritable(0));
+        context.write(new Text(header), new DoubleWritable(0));
         return;
       }
 
@@ -36,37 +36,37 @@ public class SlidingWindow {
       // Get relevant columns
       LocalDate recordDate = LocalDate.parse(record[2], DateTimeFormatter.ofPattern("MM-dd-yy"));
       String category = record[9];
-      float amount = Float.parseFloat(record[15]);
+      double amount = Double.parseDouble(record[15]);
 
       for (int i = 0; i < 3; i++) {
         String outKey = recordDate.plusDays(i).toString() + "," + category;
-        context.write(new Text(outKey), new FloatWritable(amount));
+        context.write(new Text(outKey), new DoubleWritable(amount));
       }
     }
   }
 
-  public static class SumCombiner extends Reducer<Text, FloatWritable, Text, FloatWritable> {
-    public void reduce(Text key, Iterable<FloatWritable> values, Context context)
+  public static class SumCombiner extends Reducer<Text, DoubleWritable, Text, DoubleWritable> {
+    public void reduce(Text key, Iterable<DoubleWritable> values, Context context)
         throws IOException, InterruptedException {
       
-      float sum = 0;
-      for (FloatWritable val : values) {
+      double sum = 0;
+      for (DoubleWritable val : values) {
         sum += val.get();
       }
       
-      context.write(key, new FloatWritable(sum));
+      context.write(key, new DoubleWritable(sum));
     }
   }
 
-  public static class FloatSumReducer
-       extends Reducer<Text,FloatWritable,Text,NullWritable> {
+  public static class DoubleSumReducer
+       extends Reducer<Text,DoubleWritable,Text,NullWritable> {
 
-    public void reduce(Text key, Iterable<FloatWritable> values,
+    public void reduce(Text key, Iterable<DoubleWritable> values,
                        Context context
                        ) throws IOException, InterruptedException {
 
-      float sum = 0;
-      for (FloatWritable val : values) {
+      double sum = 0;
+      for (DoubleWritable val : values) {
         sum += val.get();
       }
 
@@ -83,10 +83,7 @@ public class SlidingWindow {
       String formattedDate = (LocalDate.parse(parts[0]))
                 .format(DateTimeFormatter.ofPattern("dd/MM/yyyy"));
 
-      // Format sum with two decimals
-      String formattedSum = String.format("%.2f", sum);
-
-      String outKey = formattedDate + "," + parts[1] + "," + formattedSum;
+      String outKey = formattedDate + "," + parts[1] + "," + String.format("%.2f", sum);
       context.write(new Text(outKey), NullWritable.get());
     }
   }
@@ -97,9 +94,9 @@ public class SlidingWindow {
     job.setJarByClass(SlidingWindow.class);
     job.setMapperClass(WindowMapper.class);
     job.setCombinerClass(SumCombiner.class);
-    job.setReducerClass(FloatSumReducer.class);
+    job.setReducerClass(DoubleSumReducer.class);
     job.setOutputKeyClass(Text.class);
-    job.setOutputValueClass(FloatWritable.class);
+    job.setOutputValueClass(DoubleWritable.class);
     FileInputFormat.addInputPath(job, new Path(args[0]));
     FileOutputFormat.setOutputPath(job, new Path(args[1]));
     System.exit(job.waitForCompletion(true) ? 0 : 1);

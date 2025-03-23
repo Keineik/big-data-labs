@@ -38,8 +38,8 @@ report_df = report_dates_df\
     .join(df, how="left", on=expr("DATEDIFF(report_date, Date) BETWEEN 0 AND 6"))\
     .groupBy("report_date", "SKU")\
     .agg(sum("Qty").alias("total_quantity"))\
-    .selectExpr("report_date", "sku", "total_quantity")\
     .orderBy(asc("report_date"), asc("sku"))\
+    .selectExpr("DATE_FORMAT(report_date, 'dd/MM/yyyy') AS report_date", "sku", "total_quantity")
 
 
 # Show and write output to file
